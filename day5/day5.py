@@ -11,6 +11,30 @@ def count_fresh(ranges, ids):
             
     return len(fresh)
 
+def part2(ranges):
+    consolidated = []
+    while ranges:
+        (lo, hi) = ranges.pop()
+        for (l,h) in consolidated:
+            if l <= lo and hi <= h:
+                # Already counted. Just skip
+                break
+            elif lo < l and h < hi:
+                ranges.append((h+1, hi))
+                hi = l-1
+            elif lo < l and l <= hi:
+                hi = l-1
+            elif lo <= h and h < hi:
+                lo = h+1
+            else:
+                assert (h < lo or hi < l)
+            assert lo <= hi
+        else:
+            consolidated.append((lo,hi))
+
+    ret = sum(hi-lo+1 for (lo,hi) in consolidated)
+    return ret
+
 if __name__=="__main__":
     
     ranges = []
@@ -30,4 +54,5 @@ if __name__=="__main__":
 
     part1 = count_fresh(ranges, ids)
     print("part1:", part1)
-        
+    part2 = part2(ranges)
+    print("part2:", part2)
