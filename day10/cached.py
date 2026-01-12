@@ -41,6 +41,9 @@ def str_button(button):
 def str_buttons(bs):
     return " ".join([str_button(b) for b in bs if np.any(b)])
 
+def str_joltage(joltage):
+    return "{" + ",".join(str(i) for i in joltage) + "}"
+
 def construct_int(arr):
     return reduce((lambda x, y: (x << 1) | y), arr)
 
@@ -112,17 +115,24 @@ def main():
         parts = line.split()
 
         lights = read_lights(parts[0])
-        joltage = read_joltage(parts[-1])
+        joltage = read_joltage(next(p for p in parts if p.startswith('{')))
         n = len(joltage)
-        buttons = [read_button(p, n) for p in parts[1:-1]]
+        buttons = [read_button(p, n) for p in parts if p.startswith('(')]
 
         button_map = {construct_int(b): b for b in buttons}
         button_map[0] = np.zeros(n, dtype=int)
 
-        print(str_lights(lights, n), str_buttons(button_map.values()), parts[-1])
-
         part1 += solve_part1(lights, button_map)
-        part2 += solve_part2(joltage, button_map)
+
+        if not parts[-1].startswith('{'):
+            check = int(parts[-1])
+            assert solve_part2(joltage, button_map) == check
+            part2 += check
+        else:
+            check = solve_part2(joltage, button_map)
+            part2 += check
+
+        print(str_lights(lights, n), str_buttons(buttons), str_joltage(joltage), check)
 
     print(part1)
     print(part2)
