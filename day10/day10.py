@@ -47,6 +47,11 @@ def str_joltage(joltage):
 def construct_int(arr):
     return reduce((lambda x, y: (x << 1) | y), arr)
 
+def construct_int_9(arr):
+    mask = (1 << 9) - 1
+    assert all(arri & mask == arri for arri in arr)
+    return reduce((lambda x, y: (x << 9) | y), arr)
+
 def all_combinations(button_map):
     for n_buttons in range(1, len(button_map)+1):
         for p in combinations(button_map.keys(), r=n_buttons):
@@ -68,7 +73,7 @@ def solve_part1(lights, button_map):
         if l == lights:
             return len(p)
 
-def solve_part2(target_joltage, button_map):
+def solve_part2_uncached(target_joltage, button_map):
     # To get lowest bit of joltage correct we press each button either once or zero times
     # Then to get next lowest bit we press each button either twice or zero times.
     # Pressing twice or zero leaves lowest bit unchanged.
@@ -109,9 +114,73 @@ def solve_part2(target_joltage, button_map):
     
     return min(dfs(np.zeros(len(target_joltage), dtype=int), 0, 0))
 
+def solve_part2(target_joltage, button_map):
+    # To get lowest bit of joltage correct we press each button either once or zero times
+    # Then to get next lowest bit we press each button either twice or zero times.
+    # Pressing twice or zero leaves lowest bit unchanged.
+    #
+    # Hence we can reach the target bit by bit without undoing previous work
+    
+    # start with lowest bit i.e. 0
+
+    n = len(target_joltage)
+    cache_size = 1 << n
+
+    cached_solve = get_cached_solver(cache_size, button_map)
+
+    dfs_cache = {}
+
+    def dfs(joltage, bit):
+        # Return min number of presses required when starting from given joltage
+        #
+        # Check all lower bits are matching already
+        # mask = (1 << bit) - 1
+        # assert all(j & mask == t & mask for j, t in zip(joltage, target_joltage))
+
+        # Yield number of presses for each successful path found
+        if np.array_equal(joltage, target_joltage):
+            return 0
+
+        if np.any(np.greater(joltage, target_joltage)):
+            # No route from here
+            return None
+
+        j_int = construct_int_9(joltage)
+        if j_int in dfs_cache:
+            return dfs_cache[j_int]
+
+        light_int = construct_int(
+            ((y>>bit)&1) for y in np.bitwise_xor(joltage, target_joltage)
+            )
+
+        ret = None
+
+        for length, s in cached_solve[light_int]:
+
+            new_joltage = joltage + np.bitwise_left_shift(s, bit)
+            n_presses = length << bit
+
+            p = dfs(new_joltage, bit + 1)
+            if p == None: continue
+            
+            if ret is None:
+                ret = n_presses + p
+            else:
+                ret = min(ret, n_presses + p)
+
+        # if j_int == 0:
+        #     import pdb; pdb.set_trace()
+
+        dfs_cache[j_int] = ret
+        return ret
+
+    
+    return dfs(np.zeros(len(target_joltage), dtype=int), 0)
+
 def main():
     part1 = 0
     part2 = 0
+    max_j = 0
     for line in fileinput.input():
         parts = line.split()
 
@@ -127,6 +196,7 @@ def main():
 
         if not parts[-1].startswith('{'):
             check = int(parts[-1])
+            assert solve_part2_uncached(joltage, button_map) == check
             assert solve_part2(joltage, button_map) == check
             part2 += check
         else:
@@ -135,8 +205,12 @@ def main():
 
         print(str_lights(lights, n), str_buttons(buttons), str_joltage(joltage), check)
 
+        max_j = max(max_j, max(joltage))
+
     print(part1)
     print(part2)
+    print(bin(max_j))
 
 if __name__=="__main__":
+    hit_count = 0
     main()
