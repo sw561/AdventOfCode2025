@@ -3,23 +3,28 @@
 import fileinput
 from collections import defaultdict
 
-def dfs_wrapper(paths, start, destination):
-    def dfs(seen, node):
+def dfs_wrapper(paths, start, destination, part2=False):
+    cache = {}
+
+    def dfs(node, var=0, depth=0):
+        # print("-"*depth, node, bin(var))
         if node == destination:
-            yield 1
-            return
+            if part2:
+                return 1 if var == 0b11 else 0
+            else:
+                return 1
 
-        for n in paths[node]:
-            if n in seen:
-                raise Exception("Circular paths!?!")
+        if (node, var) in cache:
+            return cache[(node, var)]
 
-            seen.add(n)
-            yield from dfs(seen, n)
-            seen.remove(n)
+        if node == "dac": var |= 0b01
+        if node == "fft": var |= 0b10
 
-    seen = set()
-    yield from dfs(seen, start)
-        
+        ret = sum(dfs(n, var, depth+1) for n in paths[node])
+        cache[(node, var)] = ret
+        return ret
+
+    return dfs(start)
 
 def main():
     paths = defaultdict(list)
@@ -28,10 +33,11 @@ def main():
         for d in rest.strip().split(' '):
             paths[origin].append(d)
 
-    part1 = sum(dfs_wrapper(paths, "you", "out"))
-
+    part1 = dfs_wrapper(paths, "you", "out")
     print(part1)
 
+    part2 = dfs_wrapper(paths, "svr", "out", part2=True)
+    print(part2)
 
 if __name__=="__main__":
     main()
