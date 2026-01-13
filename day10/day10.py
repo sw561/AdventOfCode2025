@@ -50,7 +50,7 @@ def construct_int(arr):
 def construct_int_9(arr):
     mask = (1 << 9) - 1
     assert all(arri & mask == arri for arri in arr)
-    return reduce((lambda x, y: (x << 9) | y), arr)
+    return tuple(arr) # reduce((lambda x, y: (x << 9) | y), arr, 0)
 
 def all_combinations(button_map):
     for n_buttons in range(1, len(button_map)+1):
@@ -87,32 +87,56 @@ def solve_part2_uncached(target_joltage, button_map):
 
     cached_solve = get_cached_solver(cache_size, button_map)
 
-    def dfs(joltage, presses, bit):
+    dfs_cache = dict()
+
+    def dfs(joltage, bit):
         # Check all lower bits are matching already
         # mask = (1 << bit) - 1
         # assert all(j & mask == t & mask for j, t in zip(joltage, target_joltage))
 
         # Yield number of presses for each successful path found
         if np.array_equal(joltage, target_joltage):
-            yield presses
-            return
+            ret = 0
 
-        if np.any(np.greater(joltage, target_joltage)):
+        elif np.any(np.greater(joltage, target_joltage)):
             # No route from here
-            return
+            ret = None
 
-        light_int = construct_int(
-            ((y>>bit)&1) for y in np.bitwise_xor(joltage, target_joltage)
-            )
+        else:
+            light_int = construct_int(
+                ((y>>bit)&1) for y in np.bitwise_xor(joltage, target_joltage)
+                )
 
-        for length, s in cached_solve[light_int]:
+            ret = None
 
-            new_joltage = joltage + np.bitwise_left_shift(s, bit)
-            new_presses = presses + (length << bit)
+            for length, s in cached_solve[light_int]:
 
-            yield from dfs(new_joltage, new_presses, bit + 1)
+                new_joltage = joltage + np.bitwise_left_shift(s, bit)
+
+                r = cached_dfs(new_joltage, bit + 1)
+                if r is None: continue
+                r += (length << bit)
+                if ret is None:
+                    ret = r
+                else:
+                    ret = min(ret, r)
+
+        return ret
+
+    def cached_dfs(joltage, bit):
+        if np.any(np.greater(joltage, target_joltage)):
+            return None
+
+        j_int = construct_int_9(joltage)
+        key = (j_int, bit)
+        if key in dfs_cache:
+            return dfs_cache[key]
+
+        r = dfs(joltage, bit)
+        dfs_cache[key] = r
+        return r
     
-    return min(dfs(np.zeros(len(target_joltage), dtype=int), 0, 0))
+    return cached_dfs(np.zeros(len(target_joltage), dtype=int), 0)
 
 def solve_part2(target_joltage, button_map):
     # To get lowest bit of joltage correct we press each button either once or zero times
@@ -146,8 +170,8 @@ def solve_part2(target_joltage, button_map):
             return None
 
         j_int = construct_int_9(joltage)
-        if j_int in dfs_cache:
-            return dfs_cache[j_int]
+        if (j_int, bit) in dfs_cache:
+            return dfs_cache[(j_int, bit)]
 
         light_int = construct_int(
             ((y>>bit)&1) for y in np.bitwise_xor(joltage, target_joltage)
@@ -168,10 +192,7 @@ def solve_part2(target_joltage, button_map):
             else:
                 ret = min(ret, n_presses + p)
 
-        # if j_int == 0:
-        #     import pdb; pdb.set_trace()
-
-        dfs_cache[j_int] = ret
+        dfs_cache[(j_int, bit)] = ret
         return ret
 
     
@@ -180,7 +201,6 @@ def solve_part2(target_joltage, button_map):
 def main():
     part1 = 0
     part2 = 0
-    max_j = 0
     for line in fileinput.input():
         parts = line.split()
 
@@ -200,17 +220,13 @@ def main():
             assert solve_part2(joltage, button_map) == check
             part2 += check
         else:
-            check = solve_part2(joltage, button_map)
+            check = solve_part2_uncached(joltage, button_map)
             part2 += check
 
         print(str_lights(lights, n), str_buttons(buttons), str_joltage(joltage), check)
 
-        max_j = max(max_j, max(joltage))
-
     print(part1)
     print(part2)
-    print(bin(max_j))
 
 if __name__=="__main__":
-    hit_count = 0
     main()
