@@ -12,7 +12,8 @@ def read_lights(s):
     ret = 0
     for i in range(1, len(s)-1):
         ret <<= 1
-        ret |= 1 if s[i] == '#' else 0
+        if s[i] == '#':
+            ret |= 1
     return ret
 
 def read_button(b, n):
@@ -39,38 +40,36 @@ def str_button(button):
     return "(" + ",".join(str(i) for i, x in enumerate(button) if x) + ")"
 
 def str_buttons(bs):
-    return " ".join([str_button(b) for b in bs if np.any(b)])
+    return " ".join(map(str_button, bs))
 
 def str_joltage(joltage):
     return "{" + ",".join(str(i) for i in joltage) + "}"
 
-def construct_int(arr):
-    return reduce((lambda x, y: (x << 1) | y), arr)
+def construct_int(g):
+    return reduce((lambda x, y: (x << 1) | y), g)
 
-def all_combinations(button_map):
-    for n_buttons in range(1, len(button_map)+1):
-        for p in combinations(button_map.keys(), r=n_buttons):
-            light = reduce(xor, p)
-            yield light, p
+def all_combinations(buttons):
+    yield 0, np.zeros(len(buttons[0]), dtype=int), 0
+    for n_buttons in range(1, len(buttons)+1):
+        for p in combinations(buttons, r=n_buttons):
+            total = sum(p)
+            light = construct_int(t & 1 for t in total)
+            yield n_buttons, total, light
 
-def solve_part1(lights, button_map):
-    for l, p in all_combinations(button_map):
+def solve_part1(lights, buttons):
+    for n_buttons, _, l in all_combinations(buttons):
         if l == lights:
-            return len(p)
+            return n_buttons
 
-def get_cached_solver(cache_size, button_map):
+def get_cached_solver(cache_size, buttons):
     data = [[] for _ in range(cache_size)]
 
-    data[0].append((0, button_map[0]))
-
-    count = 0
-    for light, p in all_combinations(button_map):
-        data[light].append((len(p), sum(button_map[pi] for pi in p)))
-        count += 1
+    for n_buttons, total, light in all_combinations(buttons):
+        data[light].append((n_buttons, total))
 
     return data
 
-def solve_part2(target_joltage, button_map):
+def solve_part2(target_joltage, buttons):
     # To get lowest bit of joltage correct we press each button either once or zero times
     # Then to get next lowest bit we press each button either twice or zero times.
     # Pressing twice or zero leaves lowest bit unchanged.
@@ -81,7 +80,7 @@ def solve_part2(target_joltage, button_map):
 
     n = len(target_joltage)
     cache_size = 1 << n
-    cached_solve = get_cached_solver(cache_size, button_map)
+    cached_solve = get_cached_solver(cache_size, buttons)
 
     dfs_cache = {}
 
@@ -104,19 +103,21 @@ def solve_part2(target_joltage, button_map):
             return dfs_cache[key]
 
         light_int = construct_int(
-            ((y>>bit)&1) for y in np.bitwise_xor(joltage, target_joltage)
+            ((j^t)>>bit)&1 for j, t in zip(joltage, target_joltage)
             )
 
-        def g():
-            for length, s in cached_solve[light_int]:
-                new_joltage = joltage + np.bitwise_left_shift(s, bit)
-                n_presses = length << bit
+        ret = None
+        for length, s in cached_solve[light_int]:
+            new_joltage = joltage + np.bitwise_left_shift(s, bit)
+            n_presses = length << bit
 
-                p = dfs(new_joltage, bit + 1)
-                if p is not None:
-                    yield n_presses + p
+            p = dfs(new_joltage, bit + 1)
+            if p is not None:
+                if ret is None:
+                    ret = n_presses + p
+                else:
+                    ret = min(ret, n_presses + p)
 
-        ret = min(g(), default=None)
         dfs_cache[key] = ret
         return ret
     
@@ -133,16 +134,13 @@ def main():
         n = len(joltage)
         buttons = [read_button(p, n) for p in parts if p.startswith('(')]
 
-        button_map = {construct_int(b): b for b in buttons}
-        button_map[0] = np.zeros(n, dtype=int)
-
-        part1 += solve_part1(lights, button_map)
+        part1 += solve_part1(lights, buttons)
 
         if not parts[-1].startswith('{'):
             check = int(parts[-1])
-            assert solve_part2(joltage, button_map) == check
+            assert solve_part2(joltage, buttons) == check
         else:
-            check = solve_part2(joltage, button_map)
+            check = solve_part2(joltage, buttons)
 
         part2 += check
         print(str_lights(lights, n), str_buttons(buttons), str_joltage(joltage), check)
